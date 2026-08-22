@@ -60,6 +60,14 @@ object FlowCompat {
                 "java.util.function.Consumer",
             )
             modifiers(Modifiers.STATIC)
+        } ?: clzJavaAdapterKt?.resolve()?.optional(true)?.firstMethodOrNull {
+            name = "alwaysCollectFlow"
+            parameters(
+                "kotlinx.coroutines.CoroutineScope",
+                "kotlinx.coroutines.flow.Flow",
+                "java.util.function.Consumer",
+            )
+            modifiers(Modifiers.STATIC)
         }
     }
     private val metGetCoroutineContext by lazy {
@@ -274,7 +282,12 @@ object FlowCompat {
         return if (scope == null || collectContext == null || stateFlow.real == null) {
             null
         } else {
-            metCollectFlow?.copy()?.invoke(scope, collectContext, stateFlow.real, consumer)
+            val collector = metCollectFlow?.copy() ?: return null
+            runCatching {
+                collector.invoke(scope, collectContext, stateFlow.real, consumer)
+            }.getOrElse {
+                collector.invoke(scope, stateFlow.real, consumer)
+            }
         }
     }
 }

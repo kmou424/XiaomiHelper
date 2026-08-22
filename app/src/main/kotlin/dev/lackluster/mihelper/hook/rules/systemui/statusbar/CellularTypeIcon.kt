@@ -32,7 +32,9 @@ import dev.lackluster.mihelper.hook.rules.systemui.ResourcesUtils.mobile_type_si
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.getTypeface
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.lazyGet
+import dev.lackluster.mihelper.hook.utils.d
 import dev.lackluster.mihelper.hook.utils.e
+import dev.lackluster.mihelper.hook.utils.firstFieldCompat
 import dev.lackluster.mihelper.hook.utils.toTyped
 
 object CellularTypeIcon : StaticHooker() {
@@ -76,38 +78,50 @@ object CellularTypeIcon : StaticHooker() {
                 val mobileTypeName = resolve().firstFieldOrNull {
                     name = "mobileTypeName"
                 }?.toTyped<List<*>>()
-                resolve().firstConstructor().hook {
-                    val ori = proceed()
-                    if (typeSingle) {
-                        showMobileDataTypeSingle?.set(thisObject, true)
-                    }
-                    if (typeCustom && typeCustomVal.isNotBlank()) {
-                        val typeList = typeCustomVal.split(',')
-                        if (typeList.size == 1 && typeList[0].isNotBlank()) {
-                            mobileTypeName?.set(
-                                thisObject,
-                                List(15) { typeList[0] }
-                            )
-                        } else if (typeList.size == 15) {
-                            mobileTypeName?.set(
-                                thisObject,
-                                typeList
-                            )
+                val applyConfig: (Any?) -> Unit = { config ->
+                    if (config != null) {
+                        if (typeSingle) {
+                            showMobileDataTypeSingle?.set(config, true)
+                        }
+                        if (typeCustom && typeCustomVal.isNotBlank()) {
+                            val typeList = typeCustomVal.split(',')
+                            if (typeList.size == 1 && typeList[0].isNotBlank()) {
+                                mobileTypeName?.set(config, List(15) { typeList[0] })
+                            } else if (typeList.size == 15) {
+                                mobileTypeName?.set(config, typeList)
+                            }
                         }
                     }
-                    result(ori)
+                }
+                val ctor = resolve().optional(true).firstConstructorOrNull()
+                if (ctor != null) {
+                    ctor.hook {
+                        val ori = proceed()
+                        applyConfig(thisObject)
+                        result(ori)
+                    }
+                } else {
+                    d { "OperatorConfig constructor inlined, hooking getMiuiOperatorConfig" }
+                    listOf(
+                        "com.android.systemui.MiuiOperatorCustomizedPolicy",
+                        "com.miui.systemui.statusbar.policy.MiuiOperatorCustomizedPolicy"
+                    ).forEach { className ->
+                        className.toClassOrNull()?.resolve()?.optional(true)?.firstMethodOrNull {
+                            name { it.contains("OperatorConfig") }
+                        }?.hook {
+                            val ori = proceed()
+                            applyConfig(ori)
+                            result(ori)
+                        }
+                    }
                 }
             }
         }
         if (modifyTypeFW) {
             "com.miui.systemui.statusbar.views.MobileTypeDrawable".toClassOrNull()?.apply {
-                val mMobileTypeTextPaint = resolve().firstFieldOrNull {
-                    name = "mMobileTypeTextPaint"
-                }?.toTyped<Paint>()
-                val mMobileTypePlusPaint = resolve().firstFieldOrNull {
-                    name = "mMobileTypePlusPaint"
-                }?.toTyped<Paint>()
-                resolve().firstConstructor().hook {
+                val mMobileTypeTextPaint = firstFieldCompat("mMobileTypeTextPaint")?.toTyped<Paint>()
+                val mMobileTypePlusPaint = firstFieldCompat("mMobileTypePlusPaint")?.toTyped<Paint>()
+                resolve().firstConstructorOrNull()?.hook {
                     val ori = proceed()
                     mMobileTypeTextPaint?.get(thisObject)?.typeface = typefaceTypeFW
                     mMobileTypePlusPaint?.get(thisObject)?.typeface = typefaceTypeFW
@@ -130,7 +144,7 @@ object CellularTypeIcon : StaticHooker() {
             typeSingle &&
             (swapTypeIcon || modifyTypeSingleSize || modifyTypeSingleFW)
         ) {
-            clzMiuiMobileIconBinder?.resolve()?.firstMethodOrNull {
+            clzMiuiMobileIconBinder?.resolve()?.optional(true)?.firstMethodOrNull {
                 name = "bind"
             }?.hook {
                 val viewGroup = getArg(0) as? ViewGroup
@@ -158,7 +172,7 @@ object CellularTypeIcon : StaticHooker() {
             }
         }
         if (typeSingle && (modifyTypeSingleSize || modifyTypeSingleFW)) {
-            clzMiuiMobileIconBinder?.resolve()?.firstMethodOrNull {
+            clzMiuiMobileIconBinder?.resolve()?.optional(true)?.firstMethodOrNull {
                 name {
                     it.contains("updateMobileLayoutParams")
                 }

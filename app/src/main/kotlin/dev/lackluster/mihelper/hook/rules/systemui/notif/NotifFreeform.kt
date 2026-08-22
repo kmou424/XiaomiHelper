@@ -33,10 +33,10 @@ object NotifFreeform : StaticHooker() {
 
     override fun onHook() {
         "com.android.systemui.statusbar.notification.row.ExpandableNotificationRowInjector".toClassOrNull()?.apply {
-            val canSlide = resolve().firstFieldOrNull {
+            val canSlide = resolve().optional(true).firstFieldOrNull {
                 name = "canSlide"
             }?.toTyped<Boolean>()
-            resolve().firstMethodOrNull {
+            resolve().optional(true).firstMethodOrNull {
                 name = "updateMiniWindowBar"
             }?.hook {
                 val ori = proceed()
@@ -44,5 +44,12 @@ object NotifFreeform : StaticHooker() {
                 result(ori)
             }
         }
+        // OS4：是否允许下滑小窗看的是 AppMiniWindowManagerImpl.canNotificationSlide
+        "com.android.systemui.statusbar.notification.policy.AppMiniWindowManagerImpl".toClassOrNull()
+            ?.resolve()?.optional(true)?.firstMethodOrNull {
+                name = "canNotificationSlide"
+            }?.hook {
+                result(true)
+            }
     }
 }

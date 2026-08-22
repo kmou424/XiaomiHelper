@@ -10,20 +10,26 @@ import dev.lackluster.mihelper.BuildConfig
 import dev.lackluster.mihelper.data.Constants
 import dev.lackluster.mihelper.data.Constants.VARIABLE_FONT_DEFAULT_PATH
 import dev.lackluster.mihelper.data.preference.Preferences
+import dev.lackluster.mihelper.hook.base.HookScope
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.rules.systemui.ResourcesUtils
 import dev.lackluster.mihelper.hook.rules.systemui.ResourcesUtils.status_bar_icon_height
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils
+import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.clzCoroutineScope
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.clzStatusBarIconControllerImpl
+import dev.lackluster.mihelper.hook.rules.systemui.compat.hookAfterConstructed
 import dev.lackluster.mihelper.hook.rules.systemui.compat.FlowCompat
 import dev.lackluster.mihelper.hook.rules.systemui.compat.FlowCompat.collectFlow
 import dev.lackluster.mihelper.hook.rules.systemui.compat.IconControllerCompat
 import dev.lackluster.mihelper.hook.rules.systemui.compat.MutableStateFlowCompat
 import dev.lackluster.mihelper.hook.rules.systemui.compat.ReadonlyStateFlowCompat
 import dev.lackluster.mihelper.hook.rules.systemui.compat.TripleCompat
+import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.lazyGet
+import dev.lackluster.mihelper.hook.utils.RemotePreferences.observe
 import dev.lackluster.mihelper.hook.utils.d
 import dev.lackluster.mihelper.hook.utils.e
+import dev.lackluster.mihelper.hook.utils.firstFieldCompat
 import dev.lackluster.mihelper.hook.utils.toTyped
 import dev.lackluster.mihelper.hook.utils.HostExecutor
 import dev.lackluster.mihelper.utils.SystemProperties
@@ -32,7 +38,10 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
 object StackedMobileIcon : StaticHooker() {
-    private val enabled by Preferences.SystemUI.StatusBar.StackedMobile.ENABLED.lazyGet()
+    private const val OFFICIAL_STACKED_SLOT = "stacked_mobile"
+    private val officialSlots = setOf(OFFICIAL_STACKED_SLOT, "mobile", Constants.IconSlots.DEMO_MOBILE)
+
+    private fun iconPositionMode() = Preferences.SystemUI.StatusBar.IconTuner.ICON_POSITION.get()
     private val prefFontPath by Preferences.SystemUI.StatusBar.StackedMobile.FONT_PATH_ORIGINAL.lazyGet()
     private val defFontPath by lazy {
         SystemProperties.get("ro.miui.ui.font.mi_font_path", VARIABLE_FONT_DEFAULT_PATH)
@@ -93,7 +102,7 @@ object StackedMobileIcon : StaticHooker() {
 
     private val fldWifiAvailable by lazy {
         "com.android.systemui.statusbar.pipeline.mobile.domain.interactor.MiuiMobileIconInteractorImpl".toClassOrNull()?.let {
-            it.resolve().firstFieldOrNull {
+            it.resolve().optional(true).firstFieldOrNull {
                 name = "wifiAvailable"
             }?.toTyped<Any>()
         }
@@ -107,7 +116,12 @@ object StackedMobileIcon : StaticHooker() {
         }
     }
 
-    private val clzSignalIconModelCellular by $$"com.android.systemui.statusbar.pipeline.mobile.domain.model.SignalIconModel$Cellular".lazyClassOrNull()
+    private val clzSignalIconModelCellular by lazy {
+        $$"com.android.systemui.statusbar.pipeline.mobile.domain.model.SignalIconModel$CellularTypeIconModel$Cellular"
+            .toClassOrNull()
+            ?: $$"com.android.systemui.statusbar.pipeline.mobile.domain.model.SignalIconModel$Cellular"
+                .toClassOrNull()
+    }
     private val fldLevel by lazy {
         clzSignalIconModelCellular?.resolve()?.firstFieldOrNull {
             name = "level"
@@ -165,15 +179,90 @@ object StackedMobileIcon : StaticHooker() {
     }
 
     override fun onInit() {
-        updateSelfState(enabled)
+        updateSelfState(Preferences.SystemUI.StatusBar.StackedMobile.ENABLED.get())
+        Preferences.SystemUI.StatusBar.StackedMobile.ENABLED.observe {
+            updateSelfState(it)
+        }
+    }
+
+    fun onUserUnlocked() {
+        updateSelfState(Preferences.SystemUI.StatusBar.StackedMobile.ENABLED.get())
+        hideOfficialSlots()
+    }
+
+    fun hideOfficialSlots() {
+        val controller = IconControllerCompat.iconController ?: return
+        officialSlots.forEach { slot ->
+            IconControllerCompat.removeAllIconsForSlot(controller, slot)
+            IconControllerCompat.setIconVisibility(controller, slot, false)
+        }
+    }
+
+    private fun hookDropOfficialMobile() {
+        clzStatusBarIconControllerImpl?.resolve()?.optional(true)?.apply {
+            firstMethodOrNull {
+                name = "setNewMobileIconSubIds"
+            }?.hook {
+                IconControllerCompat.iconController = thisObject
+                val ori = proceed(arrayOf(emptyList<Any>()))
+                hideOfficialSlots()
+                result(ori)
+            }
+            firstMethodOrNull {
+                name = "setIcon"
+                parameterCount = 2
+            }?.hook {
+                val slot = getArg(0) as? String
+                val holder = getArg(1)
+                if (slot in officialSlots && holder != null) {
+                    result(null)
+                } else {
+                    result(proceed())
+                }
+            }
+            firstMethodOrNull {
+                name = "setIcon"
+                parameterCount = 3
+            }?.hook {
+                val slot = getArg(1) as? String
+                if (slot in officialSlots) {
+                    result(null)
+                } else {
+                    result(proceed())
+                }
+            }
+            firstMethodOrNull {
+                name = "handleSet"
+            }?.hook {
+                val slot = getArg(0) as? String
+                val holder = getArg(1)
+                if (slot in officialSlots && holder != null) {
+                    result(null)
+                } else {
+                    result(proceed())
+                }
+            }
+            firstMethodOrNull {
+                name = "setIconVisibility"
+            }?.hook {
+                val slot = getArg(0) as? String
+                if (slot in officialSlots) {
+                    result(proceed(arrayOf<Any?>(slot, false)))
+                } else {
+                    result(proceed())
+                }
+            }
+        }
     }
 
     override fun onHook() {
+        hookOfficialStackedBindable()
+        hookDropOfficialMobile()
+        hookStackedSlotInsertPosition()
+        hookWifiDefaultNetwork()
         // 强制着色来自动反色
         "com.android.systemui.statusbar.StatusBarIconView".toClassOrNull()?.apply {
-            val fldSlot = resolve().firstFieldOrNull {
-                name = "mSlot"
-            }?.toTyped<String>()
+            val fldSlot = firstFieldCompat("mSlot")?.toTyped<String>()
             val metSetDecorColor = resolve().firstMethodOrNull {
                 name = "setDecorColor"
                 parameters(Int::class)
@@ -183,29 +272,64 @@ object StackedMobileIcon : StaticHooker() {
                 parameterCount = 3
                 modifiers(Modifiers.STATIC)
             }?.toTyped<Int>()
-            resolve().firstMethodOrNull {
-                name = "updateLightDarkTint"
+            val stackedSlots = setOf(
+                Constants.IconSlots.STACKED_MOBILE_TYPE,
+                Constants.IconSlots.STACKED_MOBILE_ICON,
+                Constants.IconSlots.SINGLE_MOBILE_SIM1,
+                Constants.IconSlots.SINGLE_MOBILE_SIM2,
+            )
+            val metSetStaticDrawableColor = resolve().optional(true).firstMethodOrNull {
+                name = "setStaticDrawableColor"
+                parameters(Int::class)
+            }?.toTyped<Unit>()
+            fun hideIfOfficial(scope: HookScope) {
+                val slot = fldSlot?.get(scope.thisObject) ?: return
+                if (slot in officialSlots) {
+                    (scope.thisObject as? android.view.View)?.visibility = android.view.View.GONE
+                }
+            }
+            fun tintStackedIcon(scope: HookScope, color: Any?) {
+                val iconView = scope.thisObject as? ImageView ?: return
+                val slot = fldSlot?.get(scope.thisObject) ?: return
+                if (slot !in stackedSlots || color !is Int) return
+                // 新槽不在 DarkArea 列表里，不能走 getTint（会取反）。直接用系统回调给出的图标色。
+                iconView.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+                metSetDecorColor?.invoke(iconView, color)
+                metSetStaticDrawableColor?.invoke(iconView, color)
+            }
+            resolve().optional(true).firstMethodOrNull {
+                name = "set"
             }?.hook {
                 val ori = proceed()
-                val iconView = thisObject as? ImageView
+                hideIfOfficial(this)
+                result(ori)
+            }
+            resolve().optional(true).firstMethodOrNull {
+                name = "setVisibleState"
+                parameterCount = 1
+            }?.hook {
                 val slot = fldSlot?.get(thisObject)
-                if (iconView == null || slot == null) return@hook result(ori)
-                when (slot) {
-                    Constants.IconSlots.STACKED_MOBILE_TYPE, Constants.IconSlots.STACKED_MOBILE_ICON,
-                    Constants.IconSlots.SINGLE_MOBILE_SIM1, Constants.IconSlots.SINGLE_MOBILE_SIM2,
-                        -> {
-                        metGetTint?.invoke(
-                            null,
-                            getArg(0),
-                            iconView,
-                            getArg(2),
-                        )?.let { tint ->
-//                            iconView.imageTintList = ColorStateList.valueOf(tint)
-                            iconView.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
-                            metSetDecorColor?.invoke(iconView, tint)
-                        }
-                    }
+                if (slot in officialSlots) {
+                    (thisObject as? android.view.View)?.visibility = android.view.View.GONE
+                    result(proceed(arrayOf(2)))
+                } else {
+                    result(proceed())
                 }
+            }
+            resolve().optional(true).firstMethodOrNull {
+                name = "updateLightDarkTint"
+            }?.hook {
+                hideIfOfficial(this)
+                val ori = proceed()
+                tintStackedIcon(this, getArg(2))
+                result(ori)
+            }
+            resolve().optional(true).firstMethodOrNull {
+                name = "onDarkChanged"
+            }?.hook {
+                hideIfOfficial(this)
+                val ori = proceed()
+                tintStackedIcon(this, getArg(2))
                 result(ori)
             }
         }
@@ -222,10 +346,15 @@ object StackedMobileIcon : StaticHooker() {
             }?.hook {
                 val ori = proceed()
                 val iconController = fldIconController?.get(thisObject)
+                IconControllerCompat.iconController = iconController
                 val coroutineScope = fldScope?.get(thisObject)
                 val context = fldContext?.get(iconController)
                 if (iconController == null || coroutineScope == null || context == null) {
                     return@hook result(ori)
+                }
+                listOf(OFFICIAL_STACKED_SLOT, "mobile", Constants.IconSlots.DEMO_MOBILE).forEach { slot ->
+                    IconControllerCompat.removeAllIconsForSlot(iconController, slot)
+                    IconControllerCompat.setIconVisibility(iconController, slot, false)
                 }
                 // 刷新图标通用方法
                 val renderIcon = { slot: String, state: CellularIconState ->
@@ -339,7 +468,7 @@ object StackedMobileIcon : StaticHooker() {
                     }
                 }?.toTyped<Any>()
             }
-            resolve().firstConstructor().hook {
+            resolve().firstConstructorOrNull()?.hook {
                 val ori = proceed()
                 val coroutineScope = args.firstOrNull { CommonClassUtils.clzCoroutineScope?.isInstance(it) == true }
                 val reuseCache = fldReuseCache?.get(thisObject)
@@ -424,6 +553,114 @@ object StackedMobileIcon : StaticHooker() {
                 }
                 result(ori)
             }
+        }
+    }
+
+    private fun hookWifiDefaultNetwork() {
+        val clzWifiInteractor = "com.android.systemui.statusbar.pipeline.wifi.domain.interactor.WifiInteractorImpl"
+            .toClassOrNull() ?: return
+        val isDefault = clzWifiInteractor.resolve().optional(true).firstFieldOrNull {
+            name = "isDefault"
+        }?.toTyped<Any>() ?: return
+        hookAfterConstructed(clzWifiInteractor) { interactor ->
+            val scope = args.firstOrNull { clzCoroutineScope?.isInstance(it) == true } ?: return@hookAfterConstructed
+            val flow = isDefault.get(interactor) ?: return@hookAfterConstructed
+            ReadonlyStateFlowCompat<Boolean>().of(flow).collectFlow(scope) { wifi ->
+                CellularIconInteractor.isWifiAvailable.setValue(wifi)
+            }
+        }
+    }
+
+    private fun hookOfficialStackedBindable() {
+        "com.android.systemui.statusbar.pipeline.mobile.ui.StackedMobileBindableIcon".toClassOrNull()?.apply {
+            val shouldBindIcon = resolve().firstFieldOrNull {
+                name = "shouldBindIcon"
+            }?.toTyped<Boolean>()
+            val slot = resolve().firstFieldOrNull {
+                name = "slot"
+            }?.toTyped<String>()
+            resolve().optional(true).firstMethodOrNull {
+                name = "getShouldBindIcon"
+            }?.hook {
+                d { "official stacked getShouldBindIcon slot=${slot?.get(thisObject)} -> false" }
+                result(false)
+            }
+            resolve().optional(true).firstConstructorOrNull()?.hook {
+                val ori = proceed()
+                shouldBindIcon?.set(thisObject, false)
+                d { "official stacked ctor slot=${slot?.get(thisObject)} shouldBindIcon=false" }
+                result(ori)
+            }
+        }
+        "com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.StackedMobileIconViewModelImpl".toClassOrNull()?.apply {
+            resolve().optional(true).firstMethodOrNull {
+                name { it == "isIconVisible" || it == "getIsIconVisible" }
+            }?.hook {
+                result(false)
+            }
+        }
+        "com.android.systemui.statusbar.pipeline.mobile.ui.binder.StackedMobileIconBinder"
+            .toClassOrNull()
+            ?.resolve()
+            ?.optional(true)
+            ?.firstMethodOrNull { name = "bind" }
+            ?.hook {
+                val view = getArg(0) as? android.view.View
+                val ori = proceed()
+                view?.visibility = android.view.View.GONE
+                result(ori)
+            }
+    }
+
+    private fun hookStackedSlotInsertPosition() {
+        val stackedSlots = setOf(
+            Constants.IconSlots.STACKED_MOBILE_ICON,
+            Constants.IconSlots.STACKED_MOBILE_TYPE,
+            Constants.IconSlots.SINGLE_MOBILE_SIM1,
+            Constants.IconSlots.SINGLE_MOBILE_SIM2,
+        )
+        val clzList = "com.android.systemui.statusbar.phone.ui.StatusBarIconList".toClassOrNull() ?: return
+        val clzSlot = $$"com.android.systemui.statusbar.phone.ui.StatusBarIconList$Slot".toClassOrNull() ?: return
+        val fldSlots = clzList.resolve().firstFieldOrNull {
+            name = "mSlots"
+        }?.toTyped<java.util.ArrayList<Any?>>()
+        val fldName = clzSlot.resolve().firstFieldOrNull {
+            name = "mName"
+        }?.toTyped<String>()
+        val ctorSlot = clzSlot.resolve().optional(true).firstConstructorOrNull {
+            parameterCount = 1
+        }?.self?.apply { isAccessible = true }
+        clzList.resolve().optional(true).firstMethodOrNull {
+            name = "findOrInsertSlot"
+        }?.hook {
+            val slotName = getArg(0) as? String
+            // 自定义/交换顺序时由 IconManager 按 finalSlots 插槽，避免和 wifi 锚点抢位置
+            if (slotName == null || slotName !in stackedSlots || iconPositionMode() != 0) {
+                return@hook result(proceed())
+            }
+            val slots = fldSlots?.get(thisObject)
+            if (slots == null || fldName == null || ctorSlot == null) {
+                return@hook result(proceed())
+            }
+            val existing = slots.indexOfFirst { fldName.get(it) == slotName }
+            if (existing >= 0) {
+                return@hook result(existing)
+            }
+            // 跟 OS3 一样插在 mobile/wifi 右侧信号区；不要用 official stacked_mobile（它在部分列表里下标很小，会跑到最左）
+            val wifiIdx = slots.indexOfFirst { fldName.get(it) == "wifi" }
+            val mobileIdx = slots.indexOfFirst { fldName.get(it) == "mobile" }
+            val insertAt = when {
+                wifiIdx >= 0 -> wifiIdx
+                mobileIdx >= 10 -> mobileIdx
+                else -> slots.size
+            }
+            val newSlot = runCatching { ctorSlot.newInstance(slotName) }.getOrNull()
+            if (newSlot != null) {
+                slots.add(insertAt, newSlot)
+                d { "insert stacked slot $slotName at $insertAt (mobile=$mobileIdx)" }
+                return@hook result(insertAt)
+            }
+            result(proceed())
         }
     }
 

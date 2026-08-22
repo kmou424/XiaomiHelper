@@ -5,6 +5,9 @@ import com.highcapable.kavaref.extension.makeAccessible
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.clzStatusBarIconControllerImpl
 
 object IconControllerCompat {
+    @Volatile
+    var iconController: Any? = null
+
     private val metSetIcon2 by lazy {
         clzStatusBarIconControllerImpl?.resolve()?.firstMethodOrNull {
             name = "setIcon"
@@ -19,8 +22,14 @@ object IconControllerCompat {
         }?.self?.apply { makeAccessible() }
     }
     private val metSetIconVisibility by lazy {
-        clzStatusBarIconControllerImpl?.resolve()?.firstMethodOrNull {
+        clzStatusBarIconControllerImpl?.resolve()?.optional(true)?.firstMethodOrNull {
             name = "setIconVisibility"
+            parameters(String::class, Boolean::class)
+        }?.self?.apply { makeAccessible() }
+    }
+    private val metRemoveAllIconsForSlot by lazy {
+        clzStatusBarIconControllerImpl?.resolve()?.optional(true)?.firstMethodOrNull {
+            name = "removeAllIconsForSlot"
             parameters(String::class, Boolean::class)
         }?.self?.apply { makeAccessible() }
     }
@@ -35,5 +44,26 @@ object IconControllerCompat {
 
     fun setIconVisibility(iconController: Any, slot: String, visible: Boolean) {
         metSetIconVisibility?.invoke(iconController, slot, visible)
+    }
+
+    fun removeAllIconsForSlot(iconController: Any, slot: String) {
+        metRemoveAllIconsForSlot?.invoke(iconController, slot, true)
+    }
+
+    fun refreshIconGroups(controller: Any? = iconController) {
+        if (controller == null) return
+        val refreshOne = clzStatusBarIconControllerImpl?.resolve()?.optional(true)?.firstMethodOrNull {
+            name = "refreshIconGroup"
+        }?.self?.apply { makeAccessible() }
+        val refreshAll = clzStatusBarIconControllerImpl?.resolve()?.optional(true)?.firstMethodOrNull {
+            name = "refreshIconGroups"
+        }?.self?.apply { makeAccessible() }
+        val groups = clzStatusBarIconControllerImpl?.resolve()?.optional(true)?.firstFieldOrNull {
+            name = "mIconGroups"
+        }?.self?.apply { makeAccessible() }?.get(controller) as? Iterable<*>
+        groups?.forEach { group ->
+            if (group != null) runCatching { refreshOne?.invoke(controller, group) }
+        }
+        runCatching { refreshAll?.invoke(controller, 0) }
     }
 }

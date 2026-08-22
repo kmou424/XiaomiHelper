@@ -477,7 +477,7 @@ object Preferences {
                 val TYPE_WIDTH_CONDENSED = PreferenceKey("sb_font_stacked_type_width_condensed", 80)
 
                 val LARGE_TYPE_HIDE_WHEN_DISCONNECT = PreferenceKey("icon_tuner_stacked_type_hide_disconnect", false)
-                val LARGE_TYPE_HIDE_WHEN_WIFI = PreferenceKey("icon_tuner_stacked_type_hide_wifi", false)
+                val LARGE_TYPE_HIDE_WHEN_WIFI = PreferenceKey("icon_tuner_stacked_type_hide_wifi", true)
                 val LARGE_TYPE_SIZE = PreferenceKey("icon_tuner_stacked_type_size_val", 14.0f)
                 val LARGE_TYPE_FONT_WEIGHT = PreferenceKey("sb_font_stacked_type_single_weight", 400)
                 val LARGE_TYPE_PADDING_START_VAL = PreferenceKey("icon_tuner_stacked_type_padding_left_val", 2.0f)

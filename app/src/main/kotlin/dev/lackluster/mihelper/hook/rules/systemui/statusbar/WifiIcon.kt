@@ -26,6 +26,7 @@ import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.readonlyStateFlow0
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.readonlyStateFlowFalse
+import dev.lackluster.mihelper.hook.rules.systemui.compat.hookAfterConstructed
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.lazyGet
 import dev.lackluster.mihelper.hook.utils.toTyped
 
@@ -66,36 +67,51 @@ object WifiIcon : StaticHooker() {
         }
         if (!hideActivity && !hideStandard) return
         "com.android.systemui.statusbar.pipeline.wifi.ui.viewmodel.WifiViewModel".toClassOrNull()?.apply {
-            val activityInOutRes = resolve().firstFieldOrNull {
+            val activityInOutRes = resolve().optional(true).firstFieldOrNull {
                 name = "activityInOutRes"
             }?.toTyped<Any>()
-            val wifiStandard = resolve().firstFieldOrNull {
+            val wifiStandard = resolve().optional(true).firstFieldOrNull {
                 name = "wifiStandard"
             }?.toTyped<Any>()
-            val inoutLeft = resolve().firstFieldOrNull {
+            val inoutLeft = resolve().optional(true).firstFieldOrNull {
                 name = "inoutLeft"
             }?.toTyped<Any>()
-            resolve().firstConstructor().hook {
-                val ori = proceed()
+            hookAfterConstructed(
+                this,
+                fallbackClassNames = listOf(
+                    "com.android.systemui.statusbar.pipeline.wifi.ui.binder.WifiViewBinder"
+                )
+            ) { vm ->
                 if (hideActivity) {
-                    activityInOutRes?.set(
-                        thisObject,
-                        readonlyStateFlow0
-                    )
+                    activityInOutRes?.set(vm, readonlyStateFlow0)
                 }
                 if (hideStandard) {
-                    wifiStandard?.set(
-                        thisObject,
-                        readonlyStateFlow0
-                    )
+                    wifiStandard?.set(vm, readonlyStateFlow0)
                 }
                 if (activityRight && hideStandard && !hideActivity) {
-                    inoutLeft?.set(
-                        thisObject,
-                        readonlyStateFlowFalse
-                    )
+                    inoutLeft?.set(vm, readonlyStateFlowFalse)
                 }
-                result(ori)
+            }
+            if (hideActivity) {
+                resolve().optional(true).firstMethodOrNull {
+                    name = "getActivityInOutRes"
+                }?.hook {
+                    result(readonlyStateFlow0)
+                }
+            }
+            if (hideStandard) {
+                resolve().optional(true).firstMethodOrNull {
+                    name = "getWifiStandard"
+                }?.hook {
+                    result(readonlyStateFlow0)
+                }
+            }
+            if (activityRight && hideStandard && !hideActivity) {
+                resolve().optional(true).firstMethodOrNull {
+                    name = "getInoutLeft"
+                }?.hook {
+                    result(readonlyStateFlowFalse)
+                }
             }
         }
     }

@@ -1,11 +1,44 @@
 package dev.lackluster.mihelper.hook.utils
 
+import com.highcapable.kavaref.KavaRef
+import com.highcapable.kavaref.KavaRef.Companion.resolve
 import com.highcapable.kavaref.resolver.ConstructorResolver
 import com.highcapable.kavaref.resolver.FieldResolver
 import com.highcapable.kavaref.resolver.MethodResolver
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+
+/**
+ * HyperOS 4 / Android 17 often drops the Java `m` prefix on Kotlin properties
+ * (`mComponentName` → `componentName`). Try the historical name first.
+ */
+internal fun String.withoutHungarianPrefix(): String? {
+    if (length > 1 && this[0] == 'm' && this[1].isUpperCase()) {
+        return this[1].lowercaseChar() + substring(2)
+    }
+    return null
+}
+
+internal fun <T : Any> KavaRef.MemberScope<T>.firstFieldCompat(preferred: String): FieldResolver<T>? {
+    return runCatching {
+        optional(true).firstFieldOrNull { name = preferred }
+            ?: preferred.withoutHungarianPrefix()?.let { alt ->
+                optional(true).firstFieldOrNull { name = alt }
+            }
+    }.getOrNull()
+}
+
+internal fun Class<*>.firstFieldCompat(preferred: String): FieldResolver<*>? {
+    @Suppress("UNCHECKED_CAST")
+    return (this as Class<Any>).resolve().firstFieldCompat(preferred)
+}
+
+internal fun <T : Any> KavaRef.MemberScope<T>.firstConstructorOptional() =
+    runCatching { optional(true).firstConstructorOrNull() }.getOrNull()
+
+internal fun <T : Any> KavaRef.MemberScope<T>.firstMethodOptional(name: String) =
+    runCatching { optional(true).firstMethodOrNull { this.name = name } }.getOrNull()
 
 internal class TypedField<T : Any, V>(private val rawField: Field) {
     init {

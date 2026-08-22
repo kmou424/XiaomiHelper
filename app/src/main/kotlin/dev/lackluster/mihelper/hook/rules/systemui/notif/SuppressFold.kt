@@ -13,25 +13,46 @@ object SuppressFold : StaticHooker() {
 
     override fun onHook() {
         "com.miui.systemui.notification.MiuiBaseNotifUtil".toClassOrNull()?.apply {
-            resolve().firstMethodOrNull {
+            resolve().optional(true).firstMethodOrNull {
                 name = "shouldSuppressFold"
             }?.hook {
                 result(true)
             }
         }
         "com.android.systemui.statusbar.notification.utils.NotificationUtil".toClassOrNull()?.apply {
-            resolve().firstMethodOrNull {
+            resolve().optional(true).firstMethodOrNull {
                 name = "shouldIgnoreEntry"
             }?.hook {
                 result(true)
             }
-            resolve().firstMethodOrNull {
+            resolve().optional(true).firstMethodOrNull {
+                name = "canCustomFold"
+            }?.hook {
+                result(false)
+            }
+            resolve().optional(true).firstMethodOrNull {
                 name = "setFold"
             }?.hook {
                 if (getArg(1) as? Boolean != false) {
                     w { "setFold isFold ${getArg(1)} ${getArg(0)}" }
+                    val newArgs = args.toTypedArray()
+                    newArgs[1] = false
+                    result(proceed(newArgs))
+                } else {
+                    result(proceed())
                 }
-                result(proceed())
+            }
+        }
+        "com.android.systemui.statusbar.notification.history.FoldNotifControllerImpl".toClassOrNull()?.apply {
+            resolve().optional(true).firstMethodOrNull {
+                name = "checkFoldEntrance"
+            }?.hook {
+                result(null)
+            }
+            resolve().optional(true).firstMethodOrNull {
+                name = "sendFoldNotification"
+            }?.hook {
+                result(null)
             }
         }
     }

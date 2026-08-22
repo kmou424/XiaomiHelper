@@ -24,6 +24,12 @@ object RemotePreferences {
         remotePrefs = module.getRemotePreferences(Preferences.NAME)
     }
 
+    fun reinit(module: XposedModule) {
+        runCatching {
+            remotePrefs = module.getRemotePreferences(Preferences.NAME)
+        }
+    }
+
     private val isInitialized: Boolean
         get() = this::remotePrefs.isInitialized
 

@@ -24,14 +24,14 @@ import com.highcapable.kavaref.KavaRef.Companion.resolve
 import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.rules.systemui.compat.MutableStateFlowCompat
+import dev.lackluster.mihelper.hook.rules.systemui.compat.hookAfterConstructed
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.observe
 import dev.lackluster.mihelper.hook.utils.toTyped
 
-
 object NotificationMaxNumber : StaticHooker() {
     private val internalMaxIconFlow by lazy {
-        MutableStateFlowCompat(3)
+        MutableStateFlowCompat(Preferences.SystemUI.StatusBar.NOTIF_MAX_COUNT.get())
     }
 
     override fun onInit() {
@@ -42,17 +42,38 @@ object NotificationMaxNumber : StaticHooker() {
     }
 
     override fun onHook() {
+        val replacementFlow = {
+            internalMaxIconFlow.toReadonlyStateFlow() ?: internalMaxIconFlow.toMutableStateFlow()
+        }
+        // OS3：替换 NotificationIconObserver.maxIconFlow
+        // OS4：该字段仍在，但已是 combine Flow；构造可能被内联，ViewModel 才是 binder 真正读的地方
         "com.android.systemui.statusbar.policy.NotificationIconObserver".toClassOrNull()?.apply {
-            val maxIconFlow = resolve().firstFieldOrNull {
+            val maxIconFlow = resolve().optional(true).firstFieldOrNull {
                 name = "maxIconFlow"
             }?.toTyped<Any>()
-            resolve().firstConstructorOrNull()?.hook {
-                val ori = proceed()
-                maxIconFlow?.set(
-                    thisObject,
-                    internalMaxIconFlow.toReadonlyStateFlow()
-                )
-                result(ori)
+            hookAfterConstructed(this) { observer ->
+                replacementFlow()?.let { maxIconFlow?.set(observer, it) }
+            }
+        }
+        listOf(
+            "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconContainerStatusBarViewModel",
+            "com.android.systemui.statusbar.notification.icon.ui.viewmodel.NotificationIconContainerAlwaysOnDisplayViewModel",
+        ).forEach { className ->
+            className.toClassOrNull()?.apply {
+                val maxIcons = resolve().optional(true).firstFieldOrNull {
+                    name = "maxIcons"
+                }?.toTyped<Any>()
+                hookAfterConstructed(this) { vm ->
+                    replacementFlow()?.let { maxIcons?.set(vm, it) }
+                }
+            }
+        }
+        "com.android.systemui.statusbar.phone.NotificationIconContainer".toClassOrNull()?.apply {
+            resolve().optional(true).firstMethodOrNull {
+                name = "setMaxIconsAmount"
+            }?.hook {
+                val max = internalMaxIconFlow.getValue() ?: getArg(0)
+                result(proceed(arrayOf(max)))
             }
         }
     }

@@ -60,7 +60,7 @@ object ExpandNotification : StaticHooker() {
             val fldAlwaysExpandNonGroupedNotification = resolve().firstFieldOrNull {
                 name = "mAlwaysExpandNonGroupedNotification"
             }?.toTyped<Boolean>()
-            resolve().firstConstructor().hook {
+            resolve().firstConstructorOrNull()?.hook {
                 val ori = proceed()
                 when (autoExpand) {
                     1 -> {

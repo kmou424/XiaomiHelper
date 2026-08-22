@@ -27,6 +27,7 @@ import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.rules.systemui.ResourcesUtils
 import dev.lackluster.mihelper.hook.rules.systemui.compat.ResourcesWrapper
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
+import dev.lackluster.mihelper.hook.utils.firstFieldCompat
 import dev.lackluster.mihelper.hook.utils.toTyped
 
 object KeepNotification : StaticHooker() {
@@ -42,10 +43,8 @@ object KeepNotification : StaticHooker() {
 
     override fun onHook() {
         "com.android.systemui.MiuiOperatorCustomizedPolicy".toClassOrNull()?.apply {
-            val fldShowKeyguardNotifications = resolve().firstFieldOrNull {
-                name = "mShowKeyguardNotifications"
-            }?.toTyped<Boolean>()
-            resolve().firstConstructor().hook {
+            val fldShowKeyguardNotifications = firstFieldCompat("mShowKeyguardNotifications")?.toTyped<Boolean>()
+            resolve().firstConstructorOrNull()?.hook {
                 val ori = proceed()
                 fldShowKeyguardNotifications?.set(thisObject, true)
                 result(ori)

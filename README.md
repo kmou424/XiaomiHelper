@@ -20,7 +20,8 @@
 ## 介绍
 
 HyperOS 的轻量级模块，专注于提升日常使用体验。  
-基于小米 15 Pro 的最新稳定版 HyperOS China 开发。  
+正在适配 **HyperOS 4**（Android 17）：插件作用域、StateFlow、状态栏图标等已按运行时能力探测兼容（`mXxx`/`xxx` 字段、构造函数内联回退）。HyperOS 3 仍走原路径。部分功能需在 OS4 真机上继续核对。  
+基于小米 15 Pro 的 HyperOS China 开发。  
 
 加入 [Telegram 频道](https://t.me/lackluster_stuff) 以反馈问题并获取内部更新。
 

@@ -81,16 +81,24 @@ object HideCarrierLabel : StaticHooker() {
         updateSelfState(true)
     }
 
+    private val applyingCarrierHide = ThreadLocal.withInitial { false }
+
     override fun onHook() {
         if (controlCenterHideCarrierHD) {
             clzControlCenterCarrierText?.apply {
-                resolve().firstMethodOrNull {
+                val hdText = resolve().optional(true).firstFieldOrNull {
+                    name = "hdText"
+                }?.toTyped<View>()
+                val plusText = resolve().optional(true).firstFieldOrNull {
+                    name = "plusText"
+                }?.toTyped<View>()
+                resolve().optional(true).firstMethodOrNull {
                     name = "updateHDText"
                 }?.hook {
-                    val newArgs = args.toTypedArray()
-                    newArgs[0] = false // hd
-                    newArgs[1] = false // plus
-                    result(proceed(newArgs))
+                    val ori = proceed()
+                    hdText?.get(thisObject)?.visibility = View.GONE
+                    plusText?.get(thisObject)?.visibility = View.GONE
+                    result(ori)
                 }
             }
         }
@@ -103,10 +111,10 @@ object HideCarrierLabel : StaticHooker() {
             lockscreenHideSimOne || lockscreenHideSimTwo
         ) {
             "com.android.systemui.controlcenter.shade.MiuiCarrierTextLayout".toClassOrNull()?.apply {
-                val fldLeftCarrierTextView = resolve().firstFieldOrNull {
+                val fldLeftCarrierTextView = resolve().optional(true).firstFieldOrNull {
                     name = "leftCarrierTextView"
                 }?.toTyped<View>()
-                val fldRightCarrierTextView = resolve().firstFieldOrNull {
+                val fldRightCarrierTextView = resolve().optional(true).firstFieldOrNull {
                     name = "rightCarrierTextView"
                 }?.toTyped<View>()
                 val metGetKeyguardHeaderLayout = resolve().optional(true).firstMethodOrNull {
@@ -115,52 +123,70 @@ object HideCarrierLabel : StaticHooker() {
                 val metGetQsHeaderLayout = resolve().optional(true).firstMethodOrNull {
                     name = "getQsHeaderLayout"
                 }?.toTyped<Boolean>()
-                resolve().firstConstructorOrNull {
-                    parameterCount = 2
+                val tagPosition: (Any?) -> Unit = { layout ->
+                    if (layout != null) {
+                        val isKeyguard = runCatching { metGetKeyguardHeaderLayout?.invoke(layout) }.getOrNull()
+                        val isControlCenter = runCatching { metGetQsHeaderLayout?.invoke(layout) }.getOrNull()
+                        val carrierPosition =
+                            if (isKeyguard == true) CarrierPosition.Keyguard
+                            else if (isControlCenter == true) CarrierPosition.ControlCenter
+                            else CarrierPosition.Unknown
+                        fldLeftCarrierTextView?.get(layout)?.carrierPosition = carrierPosition
+                        fldRightCarrierTextView?.get(layout)?.carrierPosition = carrierPosition
+                    }
+                }
+                // 不要在构造里调 lazy getter，OS4 会在 inflate 阶段重入导致卡死
+                resolve().optional(true).firstMethodOrNull {
+                    name = "onFinishInflate"
                 }?.hook {
                     val ori = proceed()
-                    val isKeyguard = metGetKeyguardHeaderLayout?.invoke(thisObject)
-                    val isControlCenter = metGetQsHeaderLayout?.invoke(thisObject)
-                    val carrierPosition =
-                        if (isKeyguard == null || isControlCenter == null) CarrierPosition.ControlCenter
-                        else if (isKeyguard) CarrierPosition.Keyguard
-                        else if (isControlCenter) CarrierPosition.ControlCenter
-                        else CarrierPosition.Unknown
-                    fldLeftCarrierTextView?.get(thisObject)?.carrierPosition = carrierPosition
-                    fldRightCarrierTextView?.get(thisObject)?.carrierPosition = carrierPosition
+                    tagPosition(thisObject)
+                    result(ori)
+                }
+                resolve().optional(true).firstMethodOrNull {
+                    name = "onAttachedToWindow"
+                }?.hook {
+                    val ori = proceed()
+                    tagPosition(thisObject)
                     result(ori)
                 }
             }
             $$"com.android.systemui.controlcenter.shade.ControlCenterCarrierText$mCarrierTextCallback$1".toClassOrNull()?.apply {
-                val carrierTextView = resolve().firstFieldOrNull {
+                val carrierTextView = resolve().optional(true).firstFieldOrNull {
                     type("com.android.systemui.controlcenter.shade.ControlCenterCarrierText")
                 }?.toTyped<View>()
-                resolve().firstMethodOrNull {
+                resolve().optional(true).firstMethodOrNull {
                     name = "onCarrierTextChanged"
                 }?.hook {
+                    if (applyingCarrierHide.get() == true) {
+                        return@hook result(proceed())
+                    }
                     val carrierTextView = carrierTextView?.get(thisObject) ?: return@hook result(proceed())
                     val id = carrierTextView.id
-                    val newArgs = args.toTypedArray()
-                    when (carrierTextView.carrierPosition) {
-                        CarrierPosition.Keyguard -> {
-                            if (
-                                lockscreenHideSimOne && id == ResourcesUtils.normal_control_center_carrier_view ||
+                    val hide = when (carrierTextView.carrierPosition) {
+                        CarrierPosition.Keyguard ->
+                            lockscreenHideSimOne && id == ResourcesUtils.normal_control_center_carrier_view ||
                                 lockscreenHideSimTwo && id == ResourcesUtils.normal_control_center_carrier_second_view
-                            ) {
-                                newArgs[2] = ""
-                            }
-                        }
-                        CarrierPosition.Unknown, CarrierPosition.ControlCenter -> {
-                            if (
-                                controlCenterHideSimOne && id == ResourcesUtils.normal_control_center_carrier_view ||
+                        CarrierPosition.Unknown, CarrierPosition.ControlCenter ->
+                            controlCenterHideSimOne && id == ResourcesUtils.normal_control_center_carrier_view ||
                                 controlCenterHideSimTwo && id == ResourcesUtils.normal_control_center_carrier_second_view
-                            ) {
-                                newArgs[2] = ""
-                            }
-                        }
-                        else -> {}
+                        else -> false
                     }
-                    result(proceed(newArgs))
+                    if (!hide) {
+                        return@hook result(proceed())
+                    }
+                    val textIdx = args.indices.firstOrNull { getArg(it) is String } ?: 1
+                    if ((getArg(textIdx) as? String).isNullOrEmpty()) {
+                        return@hook result(proceed())
+                    }
+                    applyingCarrierHide.set(true)
+                    try {
+                        val newArgs = args.toTypedArray()
+                        newArgs[textIdx] = ""
+                        result(proceed(newArgs))
+                    } finally {
+                        applyingCarrierHide.set(false)
+                    }
                 }
             }
         }

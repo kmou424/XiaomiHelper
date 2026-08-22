@@ -40,7 +40,7 @@ object RegionSampling : StaticHooker() {
             val isNightMode = resolve().firstFieldOrNull {
                 name = "isNightMode"
             }?.toTyped<Any>()
-            resolve().firstConstructor().hook {
+            resolve().firstConstructorOrNull()?.hook {
                 val ori = proceed()
                 if (mode == 1) {
                     isNightMode?.set(thisObject, readonlyStateFlowTrue)
@@ -54,7 +54,7 @@ object RegionSampling : StaticHooker() {
             val useRegionSampling = resolve().firstFieldOrNull {
                 name = "useRegionSampling"
             }?.toTyped<Boolean>()
-            resolve().firstConstructor().hook {
+            resolve().firstConstructorOrNull()?.hook {
                 val ori = proceed()
                 if (mode == 1) {
                     useRegionSampling?.set(thisObject, true)

@@ -34,7 +34,7 @@ object NotifWhitelist : StaticHooker() {
 
     override fun onHook() {
         "com.miui.systemui.notification.NotificationSettingsManager".toClassOrNull()?.apply {
-            resolve().firstFieldOrNull {
+            resolve().optional(true).firstFieldOrNull {
                 name = "USE_WHITE_LISTS"
                 modifiers(Modifiers.STATIC)
             }?.set(false)

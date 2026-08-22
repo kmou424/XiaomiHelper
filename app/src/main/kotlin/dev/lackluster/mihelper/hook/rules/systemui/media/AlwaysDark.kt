@@ -55,7 +55,7 @@ object AlwaysDark : StaticHooker() {
             val metGet = "dagger.Lazy".toClassOrNull()?.resolve()?.firstMethodOrNull {
                 name = "get"
             }?.toTyped<Any>()
-            resolve().firstConstructor().hook {
+            resolve().firstConstructorOrNull()?.hook {
                 val ori = proceed()
                 val context = fldContext?.get(thisObject)
                 if (context != null) {

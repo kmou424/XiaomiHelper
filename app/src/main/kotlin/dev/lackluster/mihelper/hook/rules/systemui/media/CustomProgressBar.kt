@@ -146,7 +146,7 @@ internal object CustomProgressBar : StaticHooker() {
     }
     private val ctorSeekBarChangeListener by lazy {
         $$"com.android.systemui.media.controls.ui.viewmodel.SeekBarViewModel$SeekBarChangeListener".toClassOrNull()
-            ?.resolve()?.firstConstructorOrNull {
+            ?.resolve()?.optional(true)?.firstConstructorOrNull {
                 parameterCount = 2
             }
     }
@@ -177,7 +177,7 @@ internal object CustomProgressBar : StaticHooker() {
         if (ncProgressStyle == 0) {
             if (clzHyperProgressSeekBar != null) {
                 clzMiuiMediaViewHolder?.apply {
-                    resolve().firstConstructor().hook {
+                    resolve().optional(true).firstConstructorOrNull()?.hook {
                         val ori = proceed()
                         val seekBar = ncSeekBar?.get(thisObject)
                         if (seekBar != null && clzHyperProgressSeekBar?.isInstance(seekBar) == true) {
@@ -195,7 +195,7 @@ internal object CustomProgressBar : StaticHooker() {
             }
         } else {
             clzMiuiMediaViewHolder?.apply {
-                resolve().firstConstructor().hook {
+                resolve().optional(true).firstConstructorOrNull()?.hook {
                     val ori = proceed()
                     getRealSeekBar(thisObject, false)
                     result(ori)
@@ -302,7 +302,7 @@ internal object CustomProgressBar : StaticHooker() {
         if (diProgressStyle == 0) {
             if (clzHyperProgressSeekBar != null) {
                 clzMiuiIslandMediaViewHolder?.apply {
-                    resolve().firstConstructor().hook {
+                    resolve().optional(true).firstConstructorOrNull()?.hook {
                         val ori = proceed()
                         val seekBar = diSeekBar?.get(thisObject)
                         if (seekBar != null && clzHyperProgressSeekBar?.isInstance(seekBar) == true) {
@@ -320,7 +320,7 @@ internal object CustomProgressBar : StaticHooker() {
             }
         } else {
             clzMiuiIslandMediaViewHolder?.apply {
-                resolve().firstConstructor().hook {
+                resolve().optional(true).firstConstructorOrNull()?.hook {
                     val ori = proceed()
                     getRealSeekBar(thisObject, true)
                     result(ori)

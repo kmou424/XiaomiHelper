@@ -30,6 +30,7 @@ import com.highcapable.kavaref.KavaRef.Companion.resolve
 import dev.lackluster.mihelper.data.Scope
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.utils.d
+import dev.lackluster.mihelper.hook.utils.firstFieldCompat
 import dev.lackluster.mihelper.hook.utils.toTyped
 
 object PluginFactory : StaticHooker() {
@@ -39,10 +40,11 @@ object PluginFactory : StaticHooker() {
 
     override fun onInit() {
         $$"com.android.systemui.shared.plugins.PluginInstance$PluginFactory".toClassOrNull()?.apply {
-            val fldComponentName = resolve().firstFieldOrNull {
-                name = "mComponentName"
-            }?.toTyped<ComponentName>()
-            resolve().firstMethodOrNull {
+            val fldComponentName = firstFieldCompat("mComponentName")?.toTyped<ComponentName>()
+            if (fldComponentName == null) {
+                d { "componentName field missing on PluginFactory" }
+            }
+            resolve().optional(true).firstMethodOrNull {
                 name = "createPluginContext"
             }?.hook {
                 val ori = proceed()

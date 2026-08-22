@@ -97,7 +97,7 @@ object FlipTinyScreen : StaticHooker() {
                 val fldMediaData = resolve().firstFieldOrNull {
                     name = "mMediaData"
                 }?.toTyped<Any>()
-                resolve().firstConstructor().hook {
+                resolve().firstConstructorOrNull()?.hook {
                     val ori = proceed()
                     getNewMediaBgView(thisObject)
                     result(ori)

@@ -25,6 +25,7 @@ import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.readonlyStateFlowFalse
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.readonlyStateFlowTrue
+import dev.lackluster.mihelper.hook.rules.systemui.compat.hookAfterConstructed
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.lazyGet
 import dev.lackluster.mihelper.hook.utils.toTyped
 
@@ -51,61 +52,70 @@ object CellularIcon : StaticHooker() {
             if (
                 hideActivity || hideType || hideVoWifi || hideVolte || hideVolteNoService || hideSpeechHD
             ) {
-                val inOutVisible = resolve().firstFieldOrNull {
+                val inOutVisible = resolve().optional(true).firstFieldOrNull {
                     name = "inOutVisible"
                 }?.toTyped<Any>()
-                val mobileTypeVisible = resolve().firstFieldOrNull {
+                val mobileTypeVisible = resolve().optional(true).firstFieldOrNull {
                     name = "mobileTypeVisible"
                 }?.toTyped<Any>()
-                val mobileTypeImageVisible = resolve().firstFieldOrNull {
+                val mobileTypeImageVisible = resolve().optional(true).firstFieldOrNull {
                     name = "mobileTypeImageVisible"
                 }?.toTyped<Any>()
-                val vowifiVisible = resolve().firstFieldOrNull {
+                val vowifiVisible = resolve().optional(true).firstFieldOrNull {
                     name = "vowifiVisible"
                 }?.toTyped<Any>()
-                val speechHd = resolve().firstFieldOrNull {
+                val speechHd = resolve().optional(true).firstFieldOrNull {
                     name = "speechHd"
                 }?.toTyped<Any>()
-                val volteNoService = resolve().firstFieldOrNull {
+                val volteNoService = resolve().optional(true).firstFieldOrNull {
                     name = "volteNoService"
                 }?.toTyped<Any>()
-                val volteVisibleGlobal = resolve().firstFieldOrNull {
+                val volteVisibleGlobal = resolve().optional(true).firstFieldOrNull {
                     name = "volteVisibleGlobal"
                 }?.toTyped<Any>()
-                resolve().firstConstructor().hook {
-                    val ori = proceed()
+                hookAfterConstructed(
+                    this,
+                    fallbackClassNames = listOf(
+                        "com.android.systemui.statusbar.pipeline.mobile.ui.binder.MiuiMobileIconBinder"
+                    )
+                ) { vm ->
                     if (hideActivity) {
-                        inOutVisible?.set(thisObject, readonlyStateFlowFalse)
+                        inOutVisible?.set(vm, readonlyStateFlowFalse)
                     }
                     if (hideType) {
-                        mobileTypeVisible?.set(thisObject, readonlyStateFlowFalse)
-                        mobileTypeImageVisible?.set(thisObject, readonlyStateFlowFalse)
+                        mobileTypeVisible?.set(vm, readonlyStateFlowFalse)
+                        mobileTypeImageVisible?.set(vm, readonlyStateFlowFalse)
                     }
                     if (hideVoWifi) {
-                        vowifiVisible?.set(thisObject, readonlyStateFlowFalse)
+                        vowifiVisible?.set(vm, readonlyStateFlowFalse)
                     }
                     if (hideVolte) {
-                        volteVisibleGlobal?.set(thisObject, readonlyStateFlowFalse)
+                        volteVisibleGlobal?.set(vm, readonlyStateFlowFalse)
                     }
                     if (hideVolteNoService) {
-                        volteNoService?.set(thisObject, readonlyStateFlowFalse)
+                        volteNoService?.set(vm, readonlyStateFlowFalse)
                     }
                     if (hideSpeechHD) {
-                        speechHd?.set(thisObject, readonlyStateFlowFalse)
+                        speechHd?.set(vm, readonlyStateFlowFalse)
                     }
-                    result(ori)
                 }
             }
-            if (!hideRoamGlobal && hideLargeRoam) {
-                resolve().firstMethodOrNull {
-                    name = "getMobileRoamVisible"
-                }?.hook {
-                    result(readonlyStateFlowFalse)
-                }
-            }
-            if (!hideRoamGlobal && hideSmallRoam) {
-                resolve().firstMethodOrNull {
-                    name = "getSmallRoamVisible"
+            val hideByGetter = mapOf(
+                "getInOutVisible" to hideActivity,
+                "getMobileTypeVisible" to hideType,
+                "getMobileTypeImageVisible" to hideType,
+                "getMobileTypeSingleVisible" to hideType,
+                "getVowifiVisible" to hideVoWifi,
+                "getVolteVisibleGlobal" to hideVolte,
+                "getVolteNoService" to hideVolteNoService,
+                "getSpeechHd" to hideSpeechHD,
+                "getMobileRoamVisible" to (!hideRoamGlobal && hideLargeRoam),
+                "getSmallRoamVisible" to (!hideRoamGlobal && hideSmallRoam),
+            )
+            hideByGetter.forEach { (method, enabled) ->
+                if (!enabled) return@forEach
+                resolve().optional(true).firstMethodOrNull {
+                    name = method
                 }?.hook {
                     result(readonlyStateFlowFalse)
                 }
@@ -113,16 +123,14 @@ object CellularIcon : StaticHooker() {
         }
         if (hideRoamGlobal || ignoreSysSettings) {
             "com.android.systemui.statusbar.policy.StatusBarIconObserver".toClassOrNull()?.apply {
-                val roamSettingBlock = resolve().firstFieldOrNull {
+                val roamSettingBlock = resolve().optional(true).firstFieldOrNull {
                     name = "roamSettingBlock"
                 }?.toTyped<Any>()
-                resolve().firstConstructor().hook {
-                    val ori = proceed()
+                hookAfterConstructed(this) { observer ->
                     roamSettingBlock?.set(
-                        thisObject,
+                        observer,
                         if (hideRoamGlobal) readonlyStateFlowTrue else readonlyStateFlowFalse
                     )
-                    result(ori)
                 }
             }
         }

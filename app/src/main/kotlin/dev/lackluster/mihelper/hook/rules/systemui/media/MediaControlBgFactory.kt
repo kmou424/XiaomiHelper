@@ -94,7 +94,7 @@ internal object MediaControlBgFactory : StaticHooker() {
         }?.toTyped<Any>()
     }
     val enumStyleContent by lazy {
-        "com.android.systemui.monet.Style".toClass().resolve().firstMethodOrNull {
+        "com.android.systemui.monet.Style".toClassOrNull()?.resolve()?.firstMethodOrNull {
             name = "valueOf"
             parameters(String::class)
             modifiers(Modifiers.STATIC)

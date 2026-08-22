@@ -23,6 +23,8 @@ package dev.lackluster.mihelper.hook.rules.systemui.statusbar
 import com.highcapable.kavaref.KavaRef.Companion.resolve
 import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
+import dev.lackluster.mihelper.hook.rules.systemui.compat.MutableStateFlowCompat
+import dev.lackluster.mihelper.hook.rules.systemui.compat.hookAfterConstructed
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.lazyGet
 import dev.lackluster.mihelper.hook.utils.toTyped
@@ -39,49 +41,83 @@ object IgnoreSysIconSettings : StaticHooker() {
     }
 
     override fun onHook() {
+        hookStatusBarIconObserver()
+        hookIconHideList()
+        if (ignoreSystem) {
+            hookNetworkSpeed()
+        }
+    }
+
+    private fun hookStatusBarIconObserver() {
         "com.android.systemui.statusbar.policy.StatusBarIconObserver".toClassOrNull()?.apply {
-            resolve().firstMethodOrNull {
-                name = "isIconBlocked"
+            val statusBarIconShow = resolve().optional(true).firstFieldOrNull {
+                name = "statusBarIconShow"
+            }?.toTyped<Any>()
+            resolve().optional(true).firstMethodOrNull {
+                name = "loadStatusBarIcon"
             }?.hook {
-                val slot = getArg(0) as? String
-                if (slot == "privacy") {
-                    result(hidePrivacy)
-                } else if (ignoreSystem) {
-                    result(false)
-                } else {
-                    result(proceed())
-                }
+                result(if (ignoreSystem) "" else proceed())
             }
-            if (ignoreSystem) {
-                resolve().firstMethodOrNull {
-                    name = "loadStatusBarIcon"
-                }?.hook {
-                    result("")
+            // OS3: isIconBlocked(slot) 在 Observer 上；OS4 已挪走，改清 statusBarIconShow
+            hookAfterConstructed(this) { observer ->
+                if (!ignoreSystem) return@hookAfterConstructed
+                val flow = statusBarIconShow?.get(observer) ?: return@hookAfterConstructed
+                val compat = MutableStateFlowCompat<Any?>().of(flow)
+                when (val value = compat.getValue()) {
+                    is String -> compat.setValue("")
+                    is Set<*> -> compat.setValue(emptySet<String>())
+                    is Collection<*> -> compat.setValue(emptyList<String>())
+                    else -> compat.setValue("")
                 }
             }
         }
-        if (ignoreSystem) {
-            "com.android.systemui.statusbar.policy.NetworkSpeedController".toClassOrNull()?.apply {
-                val mShowNetworkSpeed = resolve().firstFieldOrNull {
-                    name = "mShowNetworkSpeed"
-                }?.toTyped<Boolean>()
-                resolve().firstConstructor().hook {
-                    val ori = proceed()
-                    mShowNetworkSpeed?.set(thisObject, showNetSpeed)
-                    result(ori)
+    }
+
+    private fun hookIconHideList() {
+        "com.android.systemui.statusbar.phone.ui.StatusBarIconControllerImpl".toClassOrNull()?.apply {
+            val iconHideList = resolve().optional(true).firstFieldOrNull {
+                name = "mIconHideList"
+            }?.toTyped<MutableCollection<*>>()
+            if (ignoreSystem) {
+                hookAfterConstructed(this) { controller ->
+                    iconHideList?.get(controller)?.clear()
                 }
-                resolve().firstMethodOrNull {
-                    name {
-                        it.contains("mupdateVisibility")
-                    }
+                resolve().optional(true).firstMethodOrNull {
+                    name = "onTuningChanged"
                 }?.hook {
-                    val networkSpeedController = getArg(0)
-                    val tag = getArg(1) as? String
-                    if (tag == "show" && networkSpeedController != null) {
-                        mShowNetworkSpeed?.set(networkSpeedController, showNetSpeed)
+                    val key = getArg(0) as? String
+                    if (key == "icon_blacklist" || key?.contains("icon_blacklist") == true) {
+                        iconHideList?.get(thisObject)?.clear()
+                        result(null)
+                    } else {
+                        result(proceed())
                     }
-                    result(proceed())
                 }
+            }
+        }
+    }
+
+    private fun hookNetworkSpeed() {
+        "com.android.systemui.statusbar.policy.NetworkSpeedController".toClassOrNull()?.apply {
+            val mShowNetworkSpeed = resolve().optional(true).firstFieldOrNull {
+                name = "mShowNetworkSpeed"
+            }?.toTyped<Boolean>()
+            resolve().optional(true).firstConstructorOrNull()?.hook {
+                val ori = proceed()
+                mShowNetworkSpeed?.set(thisObject, showNetSpeed)
+                result(ori)
+            }
+            resolve().optional(true).firstMethodOrNull {
+                name {
+                    it.contains("mupdateVisibility") || it.contains("updateVisibility")
+                }
+            }?.hook {
+                val networkSpeedController = getArg(0)
+                val tag = getArg(1) as? String
+                if (tag == "show" && networkSpeedController != null) {
+                    mShowNetworkSpeed?.set(networkSpeedController, showNetSpeed)
+                }
+                result(proceed())
             }
         }
     }

@@ -38,6 +38,7 @@ import dev.lackluster.mihelper.hook.scopes.SystemUIPlugin
 import dev.lackluster.mihelper.hook.utils.RemotePreferences
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.observe
+import dev.lackluster.mihelper.utils.Device
 import dev.lackluster.mihelper.utils.MLog
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
@@ -58,6 +59,9 @@ class HookEntry : XposedModule() {
             MLog.isDebugEnabled = it
         }
         isModuleEnabled = Preferences.Module.MODULE_ENABLED.get()
+        MLog.i("HookEntry") {
+            "loaded in $processName (${Device.osLabel}), enabled=$isModuleEnabled"
+        }
     }
 
     override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
@@ -134,8 +138,12 @@ class HookEntry : XposedModule() {
         hooker.classLoader = targetClassLoader
         hooker.hookParam = param
 
-        hooker.performInit()
-        hooker.updateParentState(true)
+        try {
+            hooker.performInit()
+            hooker.updateParentState(true)
+        } catch (t: Throwable) {
+            MLog.e("HookEntry", t) { "Failed to init ${hooker.hookerName} for ${param.packageName}" }
+        }
     }
 
 }

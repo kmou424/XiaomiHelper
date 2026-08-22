@@ -20,7 +20,8 @@
 ## Introduction
 
 A lightweight module for HyperOS, focused on enhancing the daily user experience.  
-Developed based on the latest stable version of HyperOS China for the Xiaomi 15 Pro.  
+HyperOS 4 (Android 17) support is in progress: plugin scope, StateFlow, and status-bar icon hooks now use capability detection (`mXxx`/`xxx` fields, inlined-constructor fallbacks). HyperOS 3 still uses the original paths. Some features still need verification on an OS4 device.  
+Developed on HyperOS China for the Xiaomi 15 Pro.  
 
 Join our [Telegram](https://t.me/lackluster_stuff) channel to report issues and receive internal updates.  
 

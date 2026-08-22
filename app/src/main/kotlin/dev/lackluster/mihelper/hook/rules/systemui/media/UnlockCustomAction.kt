@@ -40,7 +40,7 @@ object UnlockCustomAction : StaticHooker() {
                 name = "mHiddenCustomActionsListLocal"
             }?.toTyped<List<String>>()
             val emptyList = emptyList<String>()
-            resolve().firstConstructor().hook {
+            resolve().firstConstructorOrNull()?.hook {
                 val ori = proceed()
                 fldHiddenCustomActionsList?.set(thisObject, emptyList)
                 fldHiddenCustomActionsListLocal?.set(thisObject, emptyList)

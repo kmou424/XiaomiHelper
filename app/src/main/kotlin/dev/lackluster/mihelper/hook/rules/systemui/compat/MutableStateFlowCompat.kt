@@ -79,9 +79,8 @@ class MutableStateFlowCompat<T>() : IStateFlowCompat<T> {
     }
 
     fun toReadonlyStateFlow(): Any? {
-        return real?.let {
-            ctorReadonlyStateFlow?.newInstance(it)
-        }
+        val source = real ?: return null
+        return ctorReadonlyStateFlow?.newInstance(source) ?: source
     }
 
     fun toMutableStateFlow(): Any? {

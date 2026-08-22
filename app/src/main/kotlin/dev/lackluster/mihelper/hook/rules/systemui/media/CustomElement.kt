@@ -130,7 +130,7 @@ object CustomElement : StaticHooker() {
                 }
             }
             clzMiuiMediaViewHolder?.apply {
-                resolve().firstConstructor().hook {
+                resolve().firstConstructorOrNull()?.hook {
                     val ori = proceed()
                     val mediaViewHolder = thisObject
                     val titleText = ncTitleText?.get(mediaViewHolder)
@@ -147,7 +147,7 @@ object CustomElement : StaticHooker() {
         }
         if (diModifyTextSize) {
             clzMiuiIslandMediaViewHolder?.apply {
-                resolve().firstConstructor().hook {
+                resolve().firstConstructorOrNull()?.hook {
                     val ori = proceed()
                     val mediaViewHolder = thisObject
                     val titleText = diTitleText?.get(mediaViewHolder)

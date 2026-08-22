@@ -109,7 +109,7 @@ object MiuiClock : StaticHooker() {
                 val mHandler = resolve().firstFieldOrNull {
                     name = "mHandler"
                 }?.toTyped<Handler>()
-                resolve().firstConstructor().hook {
+                resolve().firstConstructorOrNull()?.hook {
                     val ori = proceed()
                     val handler = mHandler?.get(thisObject)
                     if (handler != null) {

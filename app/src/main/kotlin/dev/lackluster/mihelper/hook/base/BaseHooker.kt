@@ -6,6 +6,7 @@ import com.highcapable.kavaref.resolver.ConstructorResolver
 import com.highcapable.kavaref.resolver.MethodResolver
 import dev.lackluster.mihelper.hook.utils.DexKit
 import dev.lackluster.mihelper.hook.utils.d
+import dev.lackluster.mihelper.hook.utils.e
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Executable
@@ -60,7 +61,13 @@ sealed class BaseHooker {
         if (oldState != newState) {
             if (newState) {
                 d { "Hook" }
-                if (!isHooked) onHook()
+                if (!isHooked) {
+                    try {
+                        onHook()
+                    } catch (t: Throwable) {
+                        e(t) { "Failed to hook $hookerName, continue with remaining hookers" }
+                    }
+                }
             } else {
                 when (this) {
                     is StaticHooker -> {
@@ -74,7 +81,13 @@ sealed class BaseHooker {
                 }
             }
 
-            childHookers.forEach { it.updateParentState(newState) }
+            childHookers.forEach { child ->
+                try {
+                    child.updateParentState(newState)
+                } catch (t: Throwable) {
+                    e(t) { "Failed to update ${child.hookerName}, continue with remaining hookers" }
+                }
+            }
         }
     }
 
@@ -104,8 +117,12 @@ sealed class BaseHooker {
 
         childHookers.add(hooker)
 
-        hooker.performInit()
-        hooker.updateParentState(isEffectiveEnabled)
+        try {
+            hooker.performInit()
+            hooker.updateParentState(isEffectiveEnabled)
+        } catch (t: Throwable) {
+            e(t) { "Failed to init ${hooker.hookerName}, continue with remaining hookers" }
+        }
     }
 
     fun Executable.hook(

@@ -25,6 +25,7 @@ import com.highcapable.kavaref.KavaRef.Companion.resolve
 import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.clzCoroutineScope
+import dev.lackluster.mihelper.hook.rules.systemui.compat.hookAfterConstructed
 import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.readonlyStateFlowFalse
 import dev.lackluster.mihelper.hook.rules.systemui.compat.FlowCompat.cancelJob
 import dev.lackluster.mihelper.hook.rules.systemui.compat.FlowCompat.combineFlows
@@ -76,6 +77,9 @@ object HideCellularIcon : StaticHooker() {
                 }
             }
         }
+        if (enableStackedMobile) {
+            hideOriginalMobileViews()
+        }
         "com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.MobileIconViewModel".toClassOrNull()?.apply {
             val subscriptionId = resolve().firstFieldOrNull {
                 name = "subscriptionId"
@@ -83,25 +87,33 @@ object HideCellularIcon : StaticHooker() {
             val isVisible = resolve().firstFieldOrNull {
                 name = "isVisible"
             }?.toTyped<Any>()
-            resolve().firstConstructor().hook {
-                val ori = proceed()
-                val subId = subscriptionId?.get(thisObject)
+            hookAfterConstructed(
+                this,
+                fallbackClassNames = listOf(
+                    "com.android.systemui.statusbar.pipeline.mobile.ui.binder.MiuiMobileIconBinder",
+                    "com.android.systemui.statusbar.pipeline.mobile.ui.view.ModernStatusBarMobileView"
+                ),
+                fallbackMethodNames = listOf("bind", "constructAndBind")
+            ) { vm ->
+                val subId = subscriptionId?.get(vm)
                 val slotIndex = subId?.let { SubscriptionManager.getSlotIndex(it) }
                 d { "MobileIconViewModel: subId=$subId slotIndex=$slotIndex" }
                 hideSimJobMap.remove(subId)?.forEach {
                     cancelJob(it)
                 }
                 if (enableStackedMobile) {
-                    isVisible?.set(thisObject, readonlyStateFlowFalse)
-                } else if (hideSimAuto && subId != null) {
-                    val coroutineScope = args.firstOrNull { clzCoroutineScope?.isInstance(it) == true } ?: return@hook result(ori)
-                    val mobileIconInteractor = args.firstOrNull { clzMobileIconInteractor?.isInstance(it) == true } ?: return@hook result(ori)
+                    isVisible?.set(vm, readonlyStateFlowFalse)
+                    return@hookAfterConstructed
+                }
+                if (hideSimAuto && subId != null) {
+                    val coroutineScope = args.firstOrNull { clzCoroutineScope?.isInstance(it) == true } ?: return@hookAfterConstructed
+                    val mobileIconInteractor = args.firstOrNull { clzMobileIconInteractor?.isInstance(it) == true } ?: return@hookAfterConstructed
                     val defaultDataSubIdFlow = mobileIconInteractor.defDataSubIdFlow?.let {
                         ReadonlyStateFlowCompat<Int?>().of(it)
-                    } ?: return@hook result(ori)
-                    val oriVisibleFlow = isVisible?.get(thisObject)?.let {
+                    } ?: return@hookAfterConstructed
+                    val oriVisibleFlow = isVisible?.get(vm)?.let {
                         ReadonlyStateFlowCompat<Boolean>().of(it)
-                    } ?: return@hook result(ori)
+                    } ?: return@hookAfterConstructed
                     val proxyStateFlow = MutableStateFlowCompat(false)
                     val jobs = combineFlows(
                         coroutineScope,
@@ -114,14 +126,18 @@ object HideCellularIcon : StaticHooker() {
                         return@combineFlows a && (b == subId)
                     }
                     hideSimJobMap[subId] = jobs
-                    isVisible.set(thisObject, proxyStateFlow.toReadonlyStateFlow())
-                } else if ((slotIndex == 0 && hideSimOne) || (slotIndex == 1 && hideSimTwo)) {
-                    isVisible?.set(thisObject, readonlyStateFlowFalse)
-                } else if (slotIndex == -1 && (hideSimOne || hideSimTwo)) {
-                    val coroutineScope = args.firstOrNull { clzCoroutineScope?.isInstance(it) == true } ?: return@hook result(ori)
-                    val oriVisibleFlow = isVisible?.get(thisObject)?.let {
+                    isVisible.set(vm, proxyStateFlow.toReadonlyStateFlow())
+                    return@hookAfterConstructed
+                }
+                if ((slotIndex == 0 && hideSimOne) || (slotIndex == 1 && hideSimTwo)) {
+                    isVisible?.set(vm, readonlyStateFlowFalse)
+                    return@hookAfterConstructed
+                }
+                if (slotIndex == -1 && (hideSimOne || hideSimTwo)) {
+                    val coroutineScope = args.firstOrNull { clzCoroutineScope?.isInstance(it) == true } ?: return@hookAfterConstructed
+                    val oriVisibleFlow = isVisible?.get(vm)?.let {
                         ReadonlyStateFlowCompat<Boolean>().of(it)
-                    } ?: return@hook result(ori)
+                    } ?: return@hookAfterConstructed
                     val slotIndexCheckFlow = MutableStateFlowCompat(false)
                     val proxyStateFlow = MutableStateFlowCompat(false)
                     val jobs = combineFlows(
@@ -135,7 +151,7 @@ object HideCellularIcon : StaticHooker() {
                         return@combineFlows a && b
                     }
                     hideSimJobMap[subId] = jobs
-                    isVisible.set(thisObject, proxyStateFlow.toReadonlyStateFlow())
+                    isVisible.set(vm, proxyStateFlow.toReadonlyStateFlow())
                     HostExecutor.execute(
                         tag = "CheckSlotIndex_${subId}",
                         backgroundTask = {
@@ -172,8 +188,52 @@ object HideCellularIcon : StaticHooker() {
                         }
                     )
                 }
-                result(ori)
             }
         }
+    }
+
+    private fun hideOriginalMobileViews() {
+        val clzMobileVm = "com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.MobileIconViewModel".toClassOrNull()
+        val clzLocVm = "com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.LocationBasedMobileViewModel".toClassOrNull()
+        val isVisible = clzMobileVm?.resolve()?.firstFieldOrNull {
+            name = "isVisible"
+        }?.toTyped<Any>()
+        val commonImpl = clzLocVm?.resolve()?.firstFieldOrNull {
+            name = "commonImpl"
+        }?.toTyped<Any>()
+
+        fun resolveVm(candidate: Any?): Any? {
+            if (candidate == null) return null
+            if (clzMobileVm?.isInstance(candidate) == true) return candidate
+            if (clzLocVm?.isInstance(candidate) == true) {
+                return commonImpl?.get(candidate) ?: candidate
+            }
+            return null
+        }
+
+        fun hideIfPresent(candidate: Any?) {
+            val vm = resolveVm(candidate) ?: return
+            isVisible?.set(vm, readonlyStateFlowFalse)
+            d { "hide original mobile isVisible on ${vm.javaClass.simpleName}" }
+        }
+
+        "com.android.systemui.statusbar.pipeline.mobile.ui.binder.MiuiMobileIconBinder"
+            .toClassOrNull()
+            ?.resolve()
+            ?.optional(true)
+            ?.firstMethodOrNull { name = "bind" }
+            ?.hook {
+                args.forEach { hideIfPresent(it) }
+                result(proceed())
+            }
+        "com.android.systemui.statusbar.pipeline.mobile.ui.view.ModernStatusBarMobileView"
+            .toClassOrNull()
+            ?.resolve()
+            ?.optional(true)
+            ?.firstMethodOrNull { name = "constructAndBind" }
+            ?.hook {
+                args.forEach { hideIfPresent(it) }
+                result(proceed())
+            }
     }
 }

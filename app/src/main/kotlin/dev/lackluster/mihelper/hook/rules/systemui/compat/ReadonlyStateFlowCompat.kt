@@ -26,9 +26,16 @@ import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.clzRe
 class ReadonlyStateFlowCompat<T>() : IStateFlowCompat<T> {
     companion object {
         private val fldMutableStateFlow by lazy {
-            clzReadonlyStateFlow?.resolve()?.firstFieldOrNull {
+            val scope = clzReadonlyStateFlow?.resolve() ?: return@lazy null
+            scope.firstFieldOrNull {
                 type("kotlinx.coroutines.flow.MutableStateFlow")
             }?.self
+                ?: scope.firstFieldOrNull {
+                    type("kotlinx.coroutines.flow.StateFlow")
+                }?.self
+                ?: scope.firstFieldOrNull {
+                    name = "\$\$delegate_0"
+                }?.self
         }
     }
 

@@ -48,6 +48,7 @@ import dev.lackluster.mihelper.BuildConfig.BUILD_TYPE
 import dev.lackluster.mihelper.BuildConfig.VERSION_CODE
 import dev.lackluster.mihelper.BuildConfig.VERSION_NAME
 import dev.lackluster.mihelper.R
+import dev.lackluster.mihelper.utils.Device
 import dev.lackluster.mihelper.app.state.AppEnvViewModel
 import dev.lackluster.mihelper.app.state.UiText
 import dev.lackluster.mihelper.app.state.XposedState
@@ -224,6 +225,12 @@ private fun AboutPageContent(
                             Spacer(modifier = Modifier.heightIn(min = 4.dp))
                             Text(
                                 text = xposedState.versionInfo,
+                                fontSize = MiuixTheme.textStyles.footnote2.fontSize,
+                                color = Color.White.copy(alpha = 0.5f),
+                            )
+                            Spacer(modifier = Modifier.heightIn(min = 2.dp))
+                            Text(
+                                text = Device.osLabel,
                                 fontSize = MiuixTheme.textStyles.footnote2.fontSize,
                                 color = Color.White.copy(alpha = 0.5f),
                             )
