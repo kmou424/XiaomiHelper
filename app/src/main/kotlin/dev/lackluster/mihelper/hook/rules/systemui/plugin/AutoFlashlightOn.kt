@@ -21,6 +21,8 @@
 package dev.lackluster.mihelper.hook.rules.systemui.plugin
 
 import android.app.Activity
+import android.app.KeyguardManager
+import android.content.Context
 import android.view.View
 import androidx.core.view.postDelayed
 import com.highcapable.kavaref.KavaRef.Companion.resolve
@@ -31,7 +33,7 @@ import dev.lackluster.mihelper.hook.utils.toTyped
 
 object AutoFlashlightOn : StaticHooker() {
     private val operateFlashlight by lazy {
-        "miui.systemui.flashlight.MiFlashlightManager".toClassOrNull()?.resolve()?.firstMethodOrNull {
+        "miui.systemui.flashlight.MiFlashlightManager".toClassOrNull()?.resolve()?.optional(true)?.firstMethodOrNull {
                 name = "asyncOperate"
             }?.toTyped<Unit>()
     }
@@ -42,19 +44,24 @@ object AutoFlashlightOn : StaticHooker() {
 
     override fun onHook() {
         "miui.systemui.flashlight.MiFlashlightActivity".toClassOrNull()?.apply {
-            val fldFlashlightManager = resolve().firstFieldOrNull {
+            val fldFlashlightManager = resolve().optional(true).firstFieldOrNull {
                 name = "flashlightManager"
             }?.toTyped<Any>()
-            val metGetFlashlightLayout = resolve().firstMethodOrNull {
+            val metGetFlashlightLayout = resolve().optional(true).firstMethodOrNull {
                 name = "getFlashlightLayout"
             }?.toTyped<View>()
-            resolve().firstMethodOrNull {
+            resolve().optional(true).firstMethodOrNull {
                 name = "onCreate"
                 superclass()
             }?.hook {
                 val ori = proceed()
                 val activity = thisObject as? Activity
-                val fromKeyguard = activity?.intent?.getBooleanExtra("from_keyguard_shortcut", false) != false
+                val fromKeyguard = activity != null && (
+                    activity.intent?.getBooleanExtra("from_keyguard_shortcut", false) == true ||
+                        runCatching {
+                            (activity.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked == true
+                        }.getOrDefault(false)
+                    )
                 if (fromKeyguard) {
                     val flashlightManager = fldFlashlightManager?.get(thisObject)
                     val miFlashlightLayout = metGetFlashlightLayout?.invoke(thisObject)

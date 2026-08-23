@@ -203,6 +203,8 @@
     <string name="systemui_lock_hide_disturb">Hide Do Not Disturb mode resident notifications</string>
     <string name="systemui_lock_keep_notif">Keep notifications after unlocking</string>
     <string name="systemui_lock_keep_notif_tips">Notifications will always be displayed on the Lock screen until they\'re manually dismissed.</string>
+    <string name="systemui_lock_match_shade">Match notification shade</string>
+    <string name="systemui_lock_match_shade_tips">Show the same notifications on the Lock screen as in the notification shade.</string>
     <string name="systemui_lock_double_tap" translatable="false">@string/common_tap_sleep</string>
     <string name="systemui_lock_flashlight_on">Turn on the flashlight automatically</string>
     <string name="systemui_lock_flashlight_on_tips">Automatically turn on the flashlight when opening the flashlight adjustment interface from the Lock screen shortcut.</string>

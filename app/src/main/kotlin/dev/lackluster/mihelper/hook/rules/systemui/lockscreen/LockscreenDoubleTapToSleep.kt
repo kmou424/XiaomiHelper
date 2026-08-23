@@ -44,12 +44,16 @@ object LockscreenDoubleTapToSleep : StaticHooker() {
     }
 
     override fun onHook() {
-        val clzNotificationsQuickSettingsContainer = "com.android.systemui.shade.NotificationsQuickSettingsContainer".toClass()
-        val metGoToSleep = PowerManager::class.resolve().firstMethodOrNull {
+        val clzNotificationsQuickSettingsContainer =
+            "com.android.systemui.shade.NotificationsQuickSettingsContainer".toClassOrNull() ?: return
+        val metGoToSleep = PowerManager::class.java.resolve().optional(true).firstMethodOrNull {
             name = "goToSleep"
             parameters(Long::class)
+        }?.toTyped<Unit>() ?: PowerManager::class.java.resolve().optional(true).firstMethodOrNull {
+            name = "goToSleep"
+            parameterCount = 3
         }?.toTyped<Unit>()
-        clzNotificationsQuickSettingsContainer.resolve().firstMethodOrNull {
+        clzNotificationsQuickSettingsContainer.resolve().optional(true).firstMethodOrNull {
             name = "dispatchTouchEvent"
         }?.hook {
             val view = thisObject as? View
@@ -74,7 +78,9 @@ object LockscreenDoubleTapToSleep : StaticHooker() {
                     val keyguardMgr = view.context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
                     val powerManager = view.context.getSystemService(Context.POWER_SERVICE) as PowerManager
                     if (keyguardMgr.isKeyguardLocked) {
-                        metGoToSleep?.invoke(powerManager, SystemClock.uptimeMillis())
+                        val now = SystemClock.uptimeMillis()
+                        runCatching { metGoToSleep?.invoke(powerManager, now) }
+                            .recoverCatching { metGoToSleep?.invoke(powerManager, now, 0, 0) }
                     }
                     view.touchTime = 0L
                     view.touchX = 0f

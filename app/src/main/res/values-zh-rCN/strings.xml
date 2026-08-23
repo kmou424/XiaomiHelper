@@ -509,6 +509,8 @@
     <string name="systemui_lock_flashlight_on">自动打开手电筒</string>
     <string name="systemui_lock_keep_notif">解锁后保留通知</string>
     <string name="systemui_lock_keep_notif_tips">通知会始终展示在锁屏界面上，直到被手动清除</string>
+    <string name="systemui_lock_match_shade">与通知中心保持一致</string>
+    <string name="systemui_lock_match_shade_tips">锁屏显示与通知中心相同的通知。</string>
     <string name="systemui_notif_expand_notif">展开通知</string>
     <string name="systemui_notif_expand_notif_def_tips">不展开通知</string>
     <string name="systemui_notif_expand_notif_first">首条</string>

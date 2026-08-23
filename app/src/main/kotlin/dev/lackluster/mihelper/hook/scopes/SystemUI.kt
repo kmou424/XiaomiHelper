@@ -10,6 +10,7 @@ import dev.lackluster.mihelper.hook.rules.systemui.lockscreen.ForceColorScheme
 import dev.lackluster.mihelper.hook.rules.systemui.lockscreen.HideDisturbNotification
 import dev.lackluster.mihelper.hook.rules.systemui.lockscreen.KeepNotification
 import dev.lackluster.mihelper.hook.rules.systemui.lockscreen.LockscreenDoubleTapToSleep
+import dev.lackluster.mihelper.hook.rules.systemui.lockscreen.LockscreenMatchShade
 import dev.lackluster.mihelper.hook.rules.systemui.lockscreen.StatusBarClockContainer
 import dev.lackluster.mihelper.hook.rules.systemui.media.CustomBackground
 import dev.lackluster.mihelper.hook.rules.systemui.media.CustomElement
@@ -52,6 +53,7 @@ object SystemUI : StaticHooker() {
         attach(LockscreenDoubleTapToSleep)
         attach(HideDisturbNotification)
         attach(KeepNotification)
+        attach(LockscreenMatchShade)
         attach(StatusBarClockContainer)
         attach(CarrierLabelFontWeight)
         attach(ForceColorScheme)

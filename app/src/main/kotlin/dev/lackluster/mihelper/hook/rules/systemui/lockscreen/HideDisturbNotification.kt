@@ -20,10 +20,12 @@
 
 package dev.lackluster.mihelper.hook.rules.systemui.lockscreen
 
+import android.view.View
 import com.highcapable.kavaref.KavaRef.Companion.resolve
 import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
+import dev.lackluster.mihelper.hook.utils.firstFieldCompat
 import dev.lackluster.mihelper.hook.utils.toTyped
 
 object HideDisturbNotification : StaticHooker() {
@@ -32,17 +34,41 @@ object HideDisturbNotification : StaticHooker() {
     }
 
     override fun onHook() {
-        "com.android.systemui.statusbar.notification.zen.ZenModeViewController".toClass().apply {
-            val manuallyDismissed = resolve().firstFieldOrNull {
+        hookOs3ZenController()
+        hookOs4ZenView()
+    }
+
+    private fun hookOs3ZenController() {
+        "com.android.systemui.statusbar.notification.zen.ZenModeViewController".toClassOrNull()?.apply {
+            val manuallyDismissed = resolve().optional(true).firstFieldOrNull {
                 name = "manuallyDismissed"
             }?.toTyped<Boolean>()
-            resolve().firstMethodOrNull {
+            resolve().optional(true).firstMethodOrNull {
                 name {
                     it.startsWith("updateVisibility")
                 }
             }?.hook {
                 manuallyDismissed?.set(thisObject, true)
                 result(proceed())
+            }
+        }
+    }
+
+    private fun hookOs4ZenView() {
+        "com.miui.systemui.notification.view.viewmodel.NotificationNumStateViewModel"
+            .toClassOrNull()?.resolve()?.optional(true)?.firstMethodOrNull {
+                name { it == "isZenModeEnabled" || it == "getIsZenModeEnabled" }
+            }?.hook {
+                result(false)
+            }
+        "com.miui.systemui.notification.view.NotificationNumStateView".toClassOrNull()?.apply {
+            val zenView = firstFieldCompat("zenView")?.toTyped<View>()
+            resolve().optional(true).firstMethodOrNull {
+                name = "updateZenViewText"
+            }?.hook {
+                val ori = proceed()
+                zenView?.get(thisObject)?.visibility = View.GONE
+                result(ori)
             }
         }
     }

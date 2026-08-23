@@ -23,27 +23,34 @@ package dev.lackluster.mihelper.hook.rules.systemui.lockscreen
 import com.highcapable.kavaref.KavaRef.Companion.resolve
 import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
-import dev.lackluster.mihelper.hook.rules.systemui.compat.CommonClassUtils.clzMiuiKeyguardStatusBarView
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
 
-object StatusBarClockContainer : StaticHooker() {
+/**
+ * 关掉锁屏相对通知中心多出来的过滤，让两者列表一致。
+ */
+object LockscreenMatchShade : StaticHooker() {
     override fun onInit() {
-        updateSelfState(Preferences.SystemUI.LockScreen.KEEP_START_CONTAINER.get())
+        updateSelfState(Preferences.SystemUI.LockScreen.MATCH_SHADE_NOTIF.get())
     }
 
     override fun onHook() {
-        clzMiuiKeyguardStatusBarView?.apply {
-            listOf(
-                "animateClockContainer",
-                "animateIconContainer",
-                "animateKeyguardLeftSideContainer",
-            ).forEach { methodName ->
-                resolve().optional(true).firstMethodOrNull {
-                    name = methodName
-                }?.hook {
-                    result(null)
-                }
+        "com.android.systemui.statusbar.notification.ExpandedNotification".toClassOrNull()
+            ?.resolve()?.optional(true)?.firstMethodOrNull {
+                name = "canShowOnKeyguard"
+            }?.hook {
+                result(true)
             }
-        }
+        "com.android.systemui.statusbar.notification.policy.NotificationFilterController"
+            .toClassOrNull()?.resolve()?.optional(true)?.firstMethodOrNull {
+                name = "forceHideOnKeyguard"
+            }?.hook {
+                result(false)
+            }
+        $$"com.android.systemui.statusbar.notification.collection.coordinator.OriginalUnseenKeyguardCoordinator$unseenNotifFilter$1"
+            .toClassOrNull()?.resolve()?.optional(true)?.firstMethodOrNull {
+                name = "shouldFilterOut"
+            }?.hook {
+                result(false)
+            }
     }
 }

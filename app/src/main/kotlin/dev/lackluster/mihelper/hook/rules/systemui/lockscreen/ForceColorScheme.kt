@@ -36,10 +36,10 @@ object ForceColorScheme : StaticHooker() {
 
     override fun onHook() {
         clzMiuiKeyguardStatusBarView?.apply {
-            val fldLightLockScreenWallpaper = resolve().firstFieldOrNull {
+            val fldLightLockScreenWallpaper = resolve().optional(true).firstFieldOrNull {
                 name = "mLightLockScreenWallpaper"
             }?.toTyped<Boolean>()
-            resolve().firstMethodOrNull {
+            resolve().optional(true).firstMethodOrNull {
                 name = "updateIconsAndTextColors"
             }?.hook {
                 fldLightLockScreenWallpaper?.set(thisObject, forceColorScheme == 2)

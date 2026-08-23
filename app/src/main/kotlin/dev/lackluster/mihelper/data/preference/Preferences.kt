@@ -254,6 +254,7 @@ object Preferences {
         object LockScreen {
             val HIDE_DISTURB_NOTIF = PreferenceKey("systemui_lockscreen_hide_disturb", false)
             val KEEP_NOTIFICATION = PreferenceKey("systemui_lockscreen_keep_notif", false)
+            val MATCH_SHADE_NOTIF = PreferenceKey("systemui_lockscreen_match_shade", false)
             val DOUBLE_TAP_TO_SLEEP = PreferenceKey("systemui_double_tap_sleep", false)
 //            val CARRIER_TEXT = PreferenceKey("systemui_lockscreen_carrier_text", false)
             val KEEP_START_CONTAINER = PreferenceKey("systemui_ls_keep_clock", false)

@@ -26,6 +26,7 @@ import dev.lackluster.mihelper.data.preference.Preferences
 import dev.lackluster.mihelper.hook.base.StaticHooker
 import dev.lackluster.mihelper.hook.rules.systemui.ResourcesUtils
 import dev.lackluster.mihelper.hook.rules.systemui.compat.ResourcesWrapper
+import dev.lackluster.mihelper.hook.rules.systemui.compat.hookAfterConstructed
 import dev.lackluster.mihelper.hook.utils.RemotePreferences.get
 import dev.lackluster.mihelper.hook.utils.firstFieldCompat
 import dev.lackluster.mihelper.hook.utils.toTyped
@@ -42,31 +43,33 @@ object KeepNotification : StaticHooker() {
     }
 
     override fun onHook() {
-        "com.android.systemui.MiuiOperatorCustomizedPolicy".toClassOrNull()?.apply {
-            val fldShowKeyguardNotifications = firstFieldCompat("mShowKeyguardNotifications")?.toTyped<Boolean>()
-            resolve().firstConstructorOrNull()?.hook {
-                val ori = proceed()
-                fldShowKeyguardNotifications?.set(thisObject, true)
+        hookOs3OperatorPolicy()
+    }
+
+    private fun hookOs3OperatorPolicy() {
+        val clz = "com.android.systemui.MiuiOperatorCustomizedPolicy".toClassOrNull() ?: return
+        val fldShowKeyguardNotifications = clz.firstFieldCompat("mShowKeyguardNotifications")?.toTyped<Boolean>()
+        hookAfterConstructed(clz) { instance ->
+            fldShowKeyguardNotifications?.set(instance, true)
+        }
+        clz.resolve().optional(true).firstMethodOrNull {
+            name = "updateMiuiOperatorConfig"
+        }?.hook {
+            val ori = proceed()
+            fldShowKeyguardNotifications?.set(thisObject, true)
+            result(ori)
+        }
+        clz.resolve().optional(true).firstMethodOrNull {
+            name = "getResourcesForOperation"
+        }?.hook {
+            val ori = proceed()
+            val res = ori as? Resources
+            if (res != null && ori !is ResourcesWrapper) {
+                result(ResourcesWrapper(ori, booleanOverrides))
+            } else {
                 result(ori)
-            }
-            resolve().firstMethodOrNull {
-                name = "updateMiuiOperatorConfig"
-            }?.hook {
-                val ori = proceed()
-                fldShowKeyguardNotifications?.set(thisObject, true)
-                result(ori)
-            }
-            resolve().firstMethodOrNull {
-                name = "getResourcesForOperation"
-            }?.hook {
-                val ori = proceed()
-                val res = ori as? Resources
-                if (res != null && ori !is ResourcesWrapper) {
-                    result(ResourcesWrapper(ori, booleanOverrides))
-                } else {
-                    result(ori)
-                }
             }
         }
     }
+
 }

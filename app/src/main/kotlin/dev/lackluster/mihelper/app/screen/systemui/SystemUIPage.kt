@@ -184,6 +184,11 @@ private fun SystemUIPageContent(
                 summary = stringResource(R.string.systemui_lock_keep_notif_tips),
             )
             SwitchPreference(
+                key = Preferences.SystemUI.LockScreen.MATCH_SHADE_NOTIF,
+                title = stringResource(R.string.systemui_lock_match_shade),
+                summary = stringResource(R.string.systemui_lock_match_shade_tips),
+            )
+            SwitchPreference(
                 key = Preferences.SystemUI.LockScreen.DOUBLE_TAP_TO_SLEEP,
                 title = stringResource(R.string.systemui_lock_double_tap),
             )
